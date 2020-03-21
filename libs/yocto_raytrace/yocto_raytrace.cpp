@@ -177,7 +177,7 @@ static vec3f eval_position(
     auto l = shape->lines[element];
     return interpolate_line(shape->positions[l.x],shape->positions[l.y], uv.x);
   }
-  return zero3f;
+  return {0,0,1};
 }
 
 // Shape element normal.
@@ -621,104 +621,91 @@ namespace yocto::raytrace {
 static vec4f trace_raytrace(const rtr::scene* scene, const ray3f& ray,
     int bounce, rng_state& rng, const trace_params& params) {
   // YOUR CODE GOES HERE
-  // intersect next point
-  auto intersection = intersect_scene_bvh(scene, ray);
-  if (!intersection.hit) {return {eval_environment(scene, ray),0};}
-  //auto hit = 1;
-  auto object = scene->objects[intersection.object];
-    
-  // evaluate geometry
-  auto normal = transform_direction(object->frame, eval_normal(object->shape, intersection.element, intersection.uv));
-  auto position = transform_point(object->frame, eval_position(object->shape, intersection.element, intersection.uv));
-  //auto outgoing = -ray.d;
-    
-  // normal corrections
-  //if (!object->shape->lines.empty()) {
-  //  normal = math::orthonormalize(outgoing, normal);
-  //}
+  
+  for (auto bounce=0; bounce<params.bounces; bounce++){
 
-  // evaluate material
-  auto material = object->material;
-  //Extract the texture coordinate from the intersected element
-  auto texcoord = eval_texcoord(object->shape, intersection.element, intersection.uv);
-  /*auto emission = material->emission * eval_texture(material->emission_tex,texcoord, false);
-  auto specular = material->specular * eval_texture(material->specular_tex, texcoord, false);
-  auto metallic = material->metallic * eval_texture(material->metallic_tex, texcoord, false);
-  auto roughness = material->roughness * eval_texture(material->roughness_tex, texcoord, false);
-  roughness = roughness * roughness;
-  auto transmission = material->transmission * eval_texture(material->transmission_tex, texcoord, false);
-  auto color = material->color * eval_texture(material->color_tex, texcoord, false);*/
-    
-  // handle opacity
-  //if (rand1f(rng) > material->opacity) {return trace_raytrace(scene, ray3f{position, outgoing}, bounce+1, rng, params); }
-    
-  // accumulate emission
-  auto radiance = material->emission;
-    
-  // exit if enough bounces are done
-  if (bounce >= params.bounces) { return {radiance,1}; }
-    
-  // compute indirect illumination
-  auto incoming = sample_hemisphere(normal, rand2f(rng));
-  auto next_ray_trace = trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params);
-  radiance += ( 2* math::pi) * material->color / math::pi *
-                 vec3f{next_ray_trace[0], next_ray_trace[1], next_ray_trace[2]} *
-                  dot(normal, incoming);
+    // intersect next point
+    auto intersection = intersect_scene_bvh(scene, ray);
+    if (!intersection.hit) {return {eval_environment(scene, ray),1};}
+    auto hit = 1;
+    auto object = scene->objects[intersection.object];
 
-  /*if(transmission){//polished dielectric
-    if (rand1f(rng) < fresnel_schlick(vec3f{0.04,0.04,0.04}, normal, outgoing).x ){
-      auto incoming = reflect(outgoing, normal);
-      auto next_ray_trace = trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params);
-      radiance += vec3f{next_ray_trace[0], next_ray_trace[1], next_ray_trace[2]};
-      hit += next_ray_trace[3];
-    }else{
-      auto incoming = -outgoing;
-      auto next_ray_trace = trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params);
-      radiance += color * vec3f{next_ray_trace[0], next_ray_trace[1], next_ray_trace[2]};
-      hit += next_ray_trace[3];
+    // evaluate geometry
+    auto normal = transform_direction(object->frame, eval_normal(object->shape, intersection.element, intersection.uv));
+    auto position = transform_point(object->frame, eval_position(object->shape, intersection.element, intersection.uv));
+    auto outgoing = -ray.d;
+
+    // normal corrections
+    if (!object->shape->lines.empty()) {
+      normal = math::orthonormalize(outgoing, normal);
     }
-  }else if (metallic && !roughness){//polished metal
-    auto incoming = reflect(outgoing, normal);
-    auto next_ray_trace = trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params);
-    radiance += fresnel_schlick(color, normal, outgoing) * vec3f{next_ray_trace[0], next_ray_trace[1], next_ray_trace[2]} ;  
-    hit += next_ray_trace[3];
-  }else if (metallic && roughness){//rough metal
-    auto incoming = sample_hemisphere(normal, rand2f(rng));
-    auto halfway = normalize(outgoing + incoming);
-    auto next_ray_trace = trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params);
-    radiance += fresnel_schlick(color, halfway, outgoing) *
-                math::microfacet_distribution(material->roughness, normal, halfway) *
-                  math::microfacet_shadowing1(material->roughness, normal, outgoing, incoming, true) /
-                    (4 * dot(normal, outgoing) * dot(normal, incoming)) * 
-                      vec3f{next_ray_trace[0], next_ray_trace[1], next_ray_trace[2]} *
-                        dot(normal, incoming);
-    hit += next_ray_trace[3];
-  }else if (specular){//rough plastic
-    auto incoming = sample_hemisphere(normal, rand2f(rng));
-    auto halfway = normalize(outgoing + incoming);
-    auto next_ray_trace = trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params);
-    radiance += (2 * math::pi) * (
-                  color / math::pi * (1 - fresnel_schlick(vec3f{0.04,0.04,0.04}, halfway, outgoing)) +
-                    fresnel_schlick(vec3f{0.04, 0.04, 0.04}, halfway, outgoing) *
-                      math::microfacet_distribution(material->roughness, normal, halfway) *
-                        math::microfacet_shadowing1(material->roughness, normal, outgoing, incoming, true) /
-                          (4 * dot(normal, outgoing) * dot(normal, incoming))) * 
-                            vec3f{next_ray_trace[0], next_ray_trace[1], next_ray_trace[2]} *
-                              dot(normal, incoming);
-    hit += next_ray_trace[3];
-  }else{//matte surfaces
-    auto incoming = sample_hemisphere(normal, rand2f(rng));
-    auto next_ray_trace = trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params);
-    radiance += (2 * math::pi) * color / math::pi * 
-                  vec3f{next_ray_trace[0], next_ray_trace[1], next_ray_trace[2]} *
-                    dot(normal, incoming);
-    hit += next_ray_trace[3];
-  }*/
 
-  // done
-  return {radiance,1};
-  //}
-  //return {zero4f};
+    // evaluate material
+    auto material = object->material;
+    //Extract the texture coordinate from the intersected element
+    auto texcoord = eval_texcoord(object->shape, intersection.element, intersection.uv);
+    auto emission = material->emission * eval_texture(material->emission_tex,texcoord, false);
+    auto specular = material->specular * eval_texture(material->specular_tex, texcoord, false);
+    auto metallic = material->metallic * eval_texture(material->metallic_tex, texcoord, false);
+    auto roughness = material->roughness * eval_texture(material->roughness_tex, texcoord, false);
+    roughness = roughness * roughness;
+    auto transmission = material->transmission * eval_texture(material->transmission_tex, texcoord, false);
+    auto color = material->color * eval_texture(material->color_tex, texcoord, false);
+
+    // handle opacity
+    if (rand1f(rng) > material->opacity) {return trace_raytrace(scene, ray3f{position, outgoing}, bounce+1, rng, params); }
+
+    // accumulate emission
+    auto radiance = vec4f{emission, hit};
+
+    // exit if enough bounces are done
+    if (bounce >= params.bounces) { return radiance; }
+
+    // compute indirect illumination
+    //auto incoming = sample_hemisphere(normal, rand2f(rng));
+    //radiance += vec4f{( 2* math::pi) * object->material->color / math::pi, 1} *
+    //               trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params) *
+    //                dot(normal, incoming);
+
+    if(transmission){//polished dielectric
+      if (rand1f(rng) < fresnel_schlick(vec3f{0.04,0.04,0.04}, normal, outgoing).x ){
+        auto incoming = reflect(outgoing, normal);
+        radiance += trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params);
+      }else{
+        auto incoming = -outgoing;
+        radiance += vec4f{color,1} * trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params);
+      }
+    }else if (metallic && !roughness){//polished metal
+      auto incoming = reflect(outgoing, normal);
+      radiance += vec4f{fresnel_schlick(color, normal, outgoing),1} * trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params) ;  
+    }else if (metallic && roughness){//rough metal
+      auto incoming = sample_hemisphere(normal, rand2f(rng));
+      auto halfway = normalize(outgoing + incoming);
+      radiance += vec4f{fresnel_schlick(color, halfway, outgoing) *
+                  math::microfacet_distribution(material->roughness, normal, halfway) *
+                    math::microfacet_shadowing1(material->roughness, normal, outgoing, incoming, true) /
+                      (4 * dot(normal, outgoing) * dot(normal, incoming)),1} * 
+                        trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params) *
+                          dot(normal, incoming);
+    }else if (specular){//rough plastic
+      auto incoming = sample_hemisphere(normal, rand2f(rng));
+      auto halfway = normalize(outgoing + incoming);
+      radiance += vec4f{(2 * math::pi) * (
+                    color / math::pi * (1 - fresnel_schlick(vec3f{0.04,0.04,0.04}, halfway, outgoing)) +
+                      fresnel_schlick(vec3f{0.04, 0.04, 0.04}, halfway, outgoing) *
+                        math::microfacet_distribution(material->roughness, normal, halfway) *
+                          math::microfacet_shadowing1(material->roughness, normal, outgoing, incoming, true) /
+                            (4 * dot(normal, outgoing) * dot(normal, incoming))),1} * 
+                              trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params) *
+                                dot(normal, incoming);
+    }else{//matte surfaces*/
+      auto incoming = sample_hemisphere(normal, rand2f(rng));
+      radiance += vec4f{(2 * math::pi) * color / math::pi,1} * 
+                    trace_raytrace(scene, ray3f{position, incoming}, bounce+1, rng, params) *
+                      dot(normal, incoming);
+      }
+    return radiance;
+  }
 }
 
 // Eyelight for quick previewing.
@@ -760,7 +747,6 @@ static vec4f trace_texcoord(const rtr::scene* scene, const ray3f& ray,
   // prepare shading point
   auto object = scene->objects[intersection.object];
   auto texcoord = eval_texcoord(object->shape, intersection.element, intersection.uv);
-  //auto color = object->material->color * eval_texture(object->material->color_tex, texcoord, false);
   // return texcoord in xy
   return {fmod(texcoord.x,1),fmod(texcoord.y,1), 0, 1};
 }
