@@ -652,10 +652,13 @@ static vec4f trace_raytrace(const rtr::scene* scene, const ray3f& ray,
     roughness = roughness * roughness;
     auto transmission = material->transmission * eval_texture(material->transmission_tex, texcoord, false).x;
     auto color = material->color * eval_texture(material->color_tex, texcoord, false);
-    auto opacity = material->opacity * eval_texture(material->opacity_tex, texcoord, false);
+    auto opacity = material->opacity * mean(eval_texture(material->opacity_tex, texcoord, false));
 
     // handle opacity
-    if (rand1f(rng) > material->opacity) {return trace_raytrace(scene, ray3f{position, outgoing, 1e-4f}, bounce+1, rng, params); }
+    if (rand1f(rng) > opacity) {
+      auto new_ray = ray3f{position + ray.d * 1e-2f, ray.d, ray.tmin, ray.tmax};
+      return trace_raytrace(scene, new_ray, bounce+1, rng, params); 
+      }
 
     // accumulate emission
     auto radiance = vec4f{emission, hit};
