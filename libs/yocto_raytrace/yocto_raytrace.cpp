@@ -637,7 +637,7 @@ static vec4f trace_raytrace(const rtr::scene* scene, const ray3f& ray,
     if (!object->shape->lines.empty()) { // For lines
       normal = math::orthonormalize(outgoing, normal);
     }else if (!object->shape->triangles.empty()) { // For triangles
-    if (dot(outgoing, normal) < 0)
+    if (dot(outgoing, normal) < 0.0f)
       normal = -normal;
     }
 
@@ -652,6 +652,7 @@ static vec4f trace_raytrace(const rtr::scene* scene, const ray3f& ray,
     roughness = roughness * roughness;
     auto transmission = material->transmission * eval_texture(material->transmission_tex, texcoord, false).x;
     auto color = material->color * eval_texture(material->color_tex, texcoord, false);
+    auto opacity = material->opacity * eval_texture(material->opacity_tex, texcoord, false);
 
     // handle opacity
     if (rand1f(rng) > material->opacity) {return trace_raytrace(scene, ray3f{position, outgoing, 1e-4f}, bounce+1, rng, params); }
@@ -848,12 +849,13 @@ void trace_samples(rtr::state* state, const rtr::scene* scene,
     for(auto j=0; j < state->render.size().y; j++){
       for(auto i=0; i < state->render.size().x; i++){
         // get pixel uv from rng
-        auto puv = math::rand2f(state->pixels[i,j].rng);
-        auto uv = (vec2f{i,j} + puv) / (vec2f)state->render.size();
+        auto ij = vec2i{i,j};
+        auto puv = math::rand2f(state->pixels[ij].rng);
+        auto uv = (vec2f{ij} + puv) / (vec2f)state->render.size();
         // get camera ray
         auto ray = eval_camera(camera, uv);
         // call shader
-        auto shader_value = shader(scene, ray, params.bounces, state->pixels[i,j].rng, params);
+        auto shader_value = shader(scene, ray, 0, state->pixels[ij].rng, params);
         // clamp to max value
         auto radiance = vec3f({shader_value[0],shader_value[1],shader_value[2]});
         auto hit = shader_value[3];
@@ -862,9 +864,9 @@ void trace_samples(rtr::state* state, const rtr::scene* scene,
             radiance = math::clamp(radiance, 0, params.clamp);
         }
         // update state accumulation, samples and render
-        state->pixels[i,j].accumulated += {radiance, hit};
-        state->pixels[i,j].samples += 1;
-        state->render[i,j] = state->pixels[i,j].accumulated / state->pixels[i,j].samples;
+        state->pixels[ij].accumulated += {radiance, hit};
+        state->pixels[ij].samples += 1;
+        state->render[ij] = state->pixels[ij].accumulated / state->pixels[ij].samples;
       }
     }
   } else {
