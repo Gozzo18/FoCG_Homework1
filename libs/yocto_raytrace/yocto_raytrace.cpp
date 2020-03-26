@@ -637,8 +637,8 @@ static vec4f trace_raytrace(const rtr::scene* scene, const ray3f& ray,
     if (!object->shape->lines.empty()) { // For lines
       normal = math::orthonormalize(outgoing, normal);
     }else if (!object->shape->triangles.empty()) { // For triangles
-    if (dot(outgoing, normal) < 0.0f)
-      normal = -normal;
+    if (object->material->thin && dot(outgoing, normal) < 0.0f)
+      normal = -normal; //Flip normals
     }
 
     // evaluate material
