@@ -656,9 +656,9 @@ static vec4f trace_raytrace(const rtr::scene* scene, const ray3f& ray,
 
     // handle opacity
     if (rand1f(rng) > opacity) {
-      auto new_ray = ray3f{position + ray.d * 1e-2f, ray.d, ray.tmin, ray.tmax};
+      auto new_ray = ray3f{position + ray.d * 1e-3f, ray.d, ray.tmin, ray.tmax};
       return trace_raytrace(scene, new_ray, bounce+1, rng, params); 
-      }
+    }
 
     // accumulate emission
     auto radiance = vec4f{emission, hit};
