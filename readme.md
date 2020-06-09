@@ -1,4 +1,4 @@
-# Yocto/Raytrace: Tiny Raytracer
+# Homework 1 - Yocto/Raytrace: Tiny Raytracer
 
 In this homework, you will learn the basic of image synthesis by 
 implementing a simple naive path tracer. In particular, you will
@@ -92,11 +92,3 @@ In this homework you will implement the following features:
 Implement refraction using `refract()` for the direction, `reflectivity_to_eta()`
 to get the index of refraction from reflectivity (0.04), and remembering to 
 invert the index of refraction when leaving a surface.
-
-## Submission
-
-To submit the homework, you need to pack a ZIP file that contains the code 
-you write and the images it generates, i.e. the ZIP _with only the 
-`yocto_raytrace/` and `out/` directories_.
-The file should be called `<numero_di_matricola>.zip` and you should exclude 
-all other directories. Send it on Google Classroom.
